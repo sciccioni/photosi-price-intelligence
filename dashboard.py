@@ -247,7 +247,7 @@ with tab3:
     st.plotly_chart(fig_vs, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — PRODOTTI E HEATMAP MULTIPLE (CATEGORIA, PRODOTTO, MERCATO)
+# TAB 4 — PRODOTTI E HEATMAP (SOLO PER CATEGORIA)
 # ══════════════════════════════════════════════════════════════════════════════
 with tab4:
     f1, f2, f3 = st.columns([2, 2, 3])
@@ -258,30 +258,27 @@ with tab4:
     df_t = df[df["competitor"].isin(filt_comp) & df["mercato"].isin(filt_paese)].copy()
     if filt_q: df_t = df_t[df_t["prodotto"].str.contains(filt_q, case=False, na=False)]
 
-    st.markdown("#### 🏷️ Esplorazione Heatmap")
+    st.markdown("#### 🏷️ Esplorazione Heatmap per Categoria")
     
     if df_t.empty:
         st.warning("⚠️ Non ci sono dati con questi filtri.")
     else:
-        # Selettore tipo Heatmap
+        # Selettore tipo Heatmap (TUTTO PER CATEGORIA)
         hm_type = st.radio("Scegli quale Heatmap visualizzare:", 
-                           ["🗂️ Categoria vs Competitor", "📦 Prodotto vs Competitor", "🌍 Prodotto vs Mercato"], 
+                           ["🗂️ Categoria vs Competitor", "🌍 Categoria vs Country (Mercato)"], 
                            horizontal=True)
         
-        # Logica Pivot a seconda della scelta
+        # Logica Pivot: Solo ed esclusivamente raggruppata per CATEGORIA
         if hm_type == "🗂️ Categoria vs Competitor":
             pivot_data = df_t.groupby(["categoria", "competitor"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
             x_title, y_title = "Competitor", "Categoria"
-        elif hm_type == "📦 Prodotto vs Competitor":
-            pivot_data = df_t.groupby(["prodotto", "competitor"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
-            x_title, y_title = "Competitor", "Prodotto"
-        else: # Prodotto vs Mercato
-            pivot_data = df_t.groupby(["prodotto", "mercato"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
-            x_title, y_title = "Mercato", "Prodotto"
+        else: # Categoria vs Mercato
+            pivot_data = df_t.groupby(["categoria", "mercato"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
+            x_title, y_title = "Mercato", "Categoria"
 
         if not pivot_data.empty:
-            # Altezza dinamica: se ci sono tanti prodotti l'altezza aumenta
-            dyn_height = max(500, len(pivot_data.index) * 30 + 100)
+            # Calcolo l'altezza in base al numero di Categorie
+            dyn_height = max(400, len(pivot_data.index) * 45 + 100)
             
             fig_c = go.Figure(go.Heatmap(
                 z=pivot_data.values, 
@@ -293,7 +290,7 @@ with tab4:
                 hovertemplate=f"<b>{x_title}:</b> %{{x}}<br><b>{y_title}:</b> %{{y}}<br><b>Prezzo Medio:</b> €%{{text}}<extra></extra>"
             ))
             
-            # 🛠️ FIX DELL'ERRORE: aggiorno prima il layout base, poi sovrascrivo i margini senza conflitti
+            # Applico il layout senza conflitti
             layout_dinamico = base_layout(dyn_height)
             layout_dinamico["margin"] = dict(l=20, r=20, t=20, b=80)
             layout_dinamico["xaxis_title"] = x_title
