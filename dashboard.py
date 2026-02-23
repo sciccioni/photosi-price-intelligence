@@ -98,7 +98,7 @@ def assegna_categoria(nome_prodotto):
 # ─────────────────────────────────────────────────────────────────────────────
 GSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTiV9qPamByIO9e9RCvaypHSqs4iP55n3p9bATJ-i3IWZ3g1pxDxzV_1awMbs6RYjmx8YISo3bp11yQ/pub?output=csv"
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def load_data(source=None) -> pd.DataFrame:
     if source is not None:
         df = pd.read_csv(source)
