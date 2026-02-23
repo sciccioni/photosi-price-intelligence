@@ -432,19 +432,18 @@ with tab1:
                         .sort_values()
                         .index.tolist())
         color_seq = [COMPETITOR_COLORS.get(c, "#888") for c in comp_order]
-
         fig_box = go.Figure()
         for comp in comp_order:
             sub = df[df["competitor"] == comp]["prezzo_eur"]
-                fig_box.add_trace(go.Box(
-                    y=sub,
-                    name=comp,
-                    marker_color=COMPETITOR_COLORS.get(comp, "#888"),
-                    line_color=COMPETITOR_COLORS.get(comp, "#888"),
-                    marker=dict(opacity=0.7),
-                    boxmean="sd",
-                    showlegend=False,
-                ))
+            fig_box.add_trace(go.Box(
+                y=sub,
+                name=comp,
+                marker_color=COMPETITOR_COLORS.get(comp, "#888"),
+                line_color=COMPETITOR_COLORS.get(comp, "#888"),
+                marker=dict(opacity=0.7),
+                boxmean="sd",
+                showlegend=False,
+            ))
         fig_box.update_layout(
             **PLOT_LAYOUT,
             height=420,
