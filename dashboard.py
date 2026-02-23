@@ -263,22 +263,26 @@ with tab4:
     if df_t.empty:
         st.warning("⚠️ Non ci sono dati con questi filtri.")
     else:
-        # Selettore tipo Heatmap (TUTTO PER CATEGORIA)
+        # Selettore tipo Heatmap aggiornato
         hm_type = st.radio("Scegli quale Heatmap visualizzare:", 
-                           ["🗂️ Categoria vs Competitor", "🌍 Categoria vs Country (Mercato)"], 
+                           ["🗂️ Categoria vs Competitor (Media Globale)", "🌍 Categoria vs Mercato & Competitor"], 
                            horizontal=True)
         
-        # Logica Pivot: Solo ed esclusivamente raggruppata per CATEGORIA
-        if hm_type == "🗂️ Categoria vs Competitor":
+        # Logica Pivot
+        if hm_type == "🗂️ Categoria vs Competitor (Media Globale)":
             pivot_data = df_t.groupby(["categoria", "competitor"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
             x_title, y_title = "Competitor", "Categoria"
-        else: # Categoria vs Mercato
-            pivot_data = df_t.groupby(["categoria", "mercato"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
-            x_title, y_title = "Mercato", "Categoria"
+        else: 
+            # MAGIA QUI: Combiniamo Mercato e Competitor per mostrare TUTTO
+            df_t["mercato_competitor"] = df_t["flag"] + " " + df_t["mercato"] + " | " + df_t["competitor"]
+            pivot_data = df_t.groupby(["categoria", "mercato_competitor"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
+            
+            # Ordiniamo le colonne in ordine alfabetico (così raggruppa prima tutte le IT, poi le FR, ecc.)
+            pivot_data = pivot_data.reindex(sorted(pivot_data.columns), axis=1)
+            x_title, y_title = "Mercato & Competitor", "Categoria"
 
         if not pivot_data.empty:
-            # Calcolo l'altezza in base al numero di Categorie
-            dyn_height = max(400, len(pivot_data.index) * 45 + 100)
+            dyn_height = max(400, len(pivot_data.index) * 45 + 150)
             
             fig_c = go.Figure(go.Heatmap(
                 z=pivot_data.values, 
@@ -290,14 +294,15 @@ with tab4:
                 hovertemplate=f"<b>{x_title}:</b> %{{x}}<br><b>{y_title}:</b> %{{y}}<br><b>Prezzo Medio:</b> €%{{text}}<extra></extra>"
             ))
             
-            # Applico il layout senza conflitti
             layout_dinamico = base_layout(dyn_height)
-            layout_dinamico["margin"] = dict(l=20, r=20, t=20, b=80)
+            layout_dinamico["margin"] = dict(l=20, r=20, t=20, b=120) # Aumentato lo spazio sotto per le scritte lunghe
             layout_dinamico["xaxis_title"] = x_title
             layout_dinamico["yaxis_title"] = y_title
             
             fig_c.update_layout(**layout_dinamico)
-            fig_c.update_xaxes(side="bottom")
+            
+            # Se ci sono tante colonne (paese+competitor), incliniamo i testi per farli leggere bene
+            fig_c.update_xaxes(side="bottom", tickangle=-45)
             
             st.plotly_chart(fig_c, use_container_width=True)
 
