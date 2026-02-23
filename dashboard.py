@@ -79,9 +79,26 @@ def base_layout(h=420):
 # ─────────────────────────────────────────────────────────────────────────────
 # CARICAMENTO DATI
 # ─────────────────────────────────────────────────────────────────────────────
+# URL pubblicazione diretta Google Sheets → CSV pubblico (no autenticazione)
+GSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTiV9qPamByIO9e9RCvaypHSqs4iP55n3p9bATJ-i3IWZ3g1pxDxzV_1awMbs6RYjmx8YISo3bp11yQ/pub?output=csv"
+
 @st.cache_data(ttl=3600)
-def load_data(source) -> pd.DataFrame:
-    df = pd.read_csv(source)
+def load_data(source=None) -> pd.DataFrame:
+    """
+    Carica i dati da:
+    1. File uploadato manualmente (priorità)
+    2. Google Sheets pubblico (automatico)
+    3. CSV locale come fallback
+    """
+    if source is not None:
+        df = pd.read_csv(source)
+    else:
+        try:
+            df = pd.read_csv(GSHEET_CSV_URL)
+        except Exception as e:
+            st.error(f"❌ Impossibile scaricare da Google Sheets: {e}")
+            st.stop()
+
     df.rename(columns={"prezzo_pulito": "prezzo_eur", "link_acquisto": "link"}, inplace=True)
     for col in ["prezzo_eur", "prezzo_originale"]:
         if col in df.columns:
@@ -103,19 +120,19 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("### 📂 Carica Dati")
-    uploaded = st.file_uploader("CSV di output", type=["csv"])
+    st.markdown("### 📂 Dati")
+    uploaded = st.file_uploader("Sostituisci con CSV locale", type=["csv"])
 
-    DEFAULT_CSV = "cataloghi_shopping_multi_mercato.csv"
     if uploaded:
         df_raw = load_data(uploaded)
-        st.success(f"✅ {len(df_raw):,} prodotti caricati")
-    elif os.path.exists(DEFAULT_CSV):
-        df_raw = load_data(DEFAULT_CSV)
-        st.info(f"📄 {DEFAULT_CSV} · {len(df_raw):,} record")
+        st.success(f"✅ {len(df_raw):,} prodotti da file locale")
     else:
-        st.warning("Carica un CSV o esegui prima lo script di raccolta.")
-        st.stop()
+        df_raw = load_data()
+        st.success(f"✅ {len(df_raw):,} prodotti da Google Sheets")
+
+    if st.button("🔄 Ricarica dati"):
+        st.cache_data.clear()
+        st.rerun()
 
     st.markdown("---")
     st.markdown("### 🎛️ Filtri")
