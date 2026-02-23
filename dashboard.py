@@ -42,7 +42,7 @@ hr { border-color:#2d2d3d !important; }
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# COSTANTI
+# COSTANTI E FUNZIONI DI BASE
 # ─────────────────────────────────────────────────────────────────────────────
 COMPETITOR_COLORS = {
     "PhotoSì":"#f4a028", "Cewe":"#4a9eff", "Photobox":"#ff6b6b",
@@ -70,6 +70,27 @@ def base_layout(h=420):
                     borderwidth=1, font=dict(size=12, color="#c8c4bc")),
     )
 
+# Funzione per categorizzare automaticamente i prodotti in base al nome
+def assegna_categoria(nome_prodotto):
+    if pd.isna(nome_prodotto):
+        return "Altro"
+    nome = str(nome_prodotto).lower()
+    
+    if any(kw in nome for kw in ["book", "album", "libro"]):
+        return "Fotolibri & Album"
+    elif any(kw in nome for kw in ["print", "stampa", "stampe", "sviluppo"]):
+        return "Stampe Foto"
+    elif any(kw in nome for kw in ["canvas", "tela", "quadro", "wall", "cornice", "poster"]):
+        return "Wall Art & Decor"
+    elif any(kw in nome for kw in ["calendar", "calendario"]):
+        return "Calendari"
+    elif any(kw in nome for kw in ["mug", "tazza", "cup"]):
+        return "Tazze & Gadget"
+    elif any(kw in nome for kw in ["card", "bigliett", "invit"]):
+        return "Biglietti & Cartoline"
+    else:
+        return "Altro"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CARICAMENTO DATI
 # ─────────────────────────────────────────────────────────────────────────────
@@ -86,7 +107,9 @@ def load_data(source=None) -> pd.DataFrame:
             st.error(f"❌ Impossibile scaricare: {e}")
             st.stop()
 
+    df.columns = df.columns.str.lower().str.strip()
     df.rename(columns={"prezzo_pulito": "prezzo_eur", "link_acquisto": "link"}, inplace=True)
+    
     for col in ["prezzo_eur", "prezzo_originale"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -96,10 +119,12 @@ def load_data(source=None) -> pd.DataFrame:
     df["flag"] = df["mercato"].map(FLAG_MAP).fillna("🌍")
     df["mercato_label"] = df["flag"] + " " + df["mercato"]
     
-    if "categoria" in df.columns:
-        df["categoria"] = df["categoria"].fillna("Altro").str.strip()
+    # 💡 CREAZIONE AUTOMATICA DELLA COLONNA CATEGORIA
+    if "prodotto" in df.columns:
+        df["categoria"] = df["prodotto"].apply(assegna_categoria)
     else:
         df["categoria"] = "Generico"
+        
     return df
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -221,40 +246,44 @@ with tab3:
     st.plotly_chart(fig_vs, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — PRODOTTI (CON HEATMAP PER CATEGORIA)
+# TAB 4 — PRODOTTI (ORA LA HEATMAP PER CATEGORIA FUNZIONA!)
 # ══════════════════════════════════════════════════════════════════════════════
 with tab4:
     f1, f2, f3 = st.columns([2, 2, 3])
-    with f1: filt_comp = st.multiselect("Filtra Competitor", df["competitor"].unique(), default=list(df["competitor"].unique())[:5], key="f4_c")
-    with f2: filt_paese = st.multiselect("Filtra Mercato", sorted(df["mercato"].unique()), default=list(sorted(df["mercato"].unique()))[:3], key="f4_m")
+    with f1: filt_comp = st.multiselect("Filtra Competitor", df["competitor"].unique(), default=list(df["competitor"].unique()), key="f4_c")
+    with f2: filt_paese = st.multiselect("Filtra Mercato", sorted(df["mercato"].unique()), default=list(sorted(df["mercato"].unique())), key="f4_m")
     with f3: filt_q = st.text_input("🔎 Cerca nel titolo", "", key="f4_q")
 
     df_t = df[df["competitor"].isin(filt_comp) & df["mercato"].isin(filt_paese)].copy()
     if filt_q: df_t = df_t[df_t["prodotto"].str.contains(filt_q, case=False, na=False)]
 
-    if not df_t.empty and "categoria" in df_t.columns:
-        st.markdown("#### 🏷️ Prezzo Medio per Categoria e Competitor")
+    st.markdown("#### 🏷️ Prezzo Medio per Categoria e Competitor")
+    
+    if df_t.empty:
+        st.warning("⚠️ Non ci sono dati con questi filtri.")
+    else:
+        # Crea la pivot table raggruppando per la nostra nuova colonna 'categoria' generata automaticamente
         pivot_cat = df_t.groupby(["categoria", "competitor"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
-        if not pivot_cat.empty:
-            fig_c = go.Figure(go.Heatmap(
-                z=pivot_cat.values, 
-                x=pivot_cat.columns, 
-                y=pivot_cat.index, 
-                colorscale=[[0, "#1a1a24"], [0.5, "#e87f12"], [1, "#f4a028"]], 
-                text=pivot_cat.values, 
-                texttemplate="%{text} €",
-                hovertemplate="<b>Competitor:</b> %{x}<br><b>Categoria:</b> %{y}<br><b>Prezzo Medio:</b> €%{text}<extra></extra>"
-            ))
-            fig_c.update_layout(**base_layout(400), xaxis_title="Competitor", yaxis_title="Categoria Prodotto")
-            fig_c.update_xaxes(side="bottom")
-            st.plotly_chart(fig_c, use_container_width=True)
+        
+        fig_c = go.Figure(go.Heatmap(
+            z=pivot_cat.values, 
+            x=pivot_cat.columns, 
+            y=pivot_cat.index, 
+            colorscale=[[0, "#1a1a24"], [0.5, "#e87f12"], [1, "#f4a028"]], 
+            text=pivot_cat.values, 
+            texttemplate="%{text} €",
+            hovertemplate="<b>Competitor:</b> %{x}<br><b>Categoria:</b> %{y}<br><b>Prezzo Medio:</b> €%{text}<extra></extra>"
+        ))
+        fig_c.update_layout(**base_layout(500), xaxis_title="Competitor", yaxis_title="Categoria Prodotto")
+        fig_c.update_xaxes(side="bottom")
+        st.plotly_chart(fig_c, use_container_width=True)
 
     st.markdown("#### 📋 Dettaglio Prodotti")
-    st.dataframe(df_t.sort_values("prezzo_eur"), use_container_width=True, hide_index=True)
-    st.download_button("⬇️ Scarica CSV", df_t.to_csv(index=False).encode('utf-8'), "dettaglio_prodotti.csv", "text/csv")
+    # Mostriamo anche la colonna categoria creata così vedi come l'ha assegnata
+    st.dataframe(df_t[["mercato", "competitor", "categoria", "prodotto", "prezzo_eur"]].sort_values("prezzo_eur"), use_container_width=True, hide_index=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 5 — INSIGHTS (CON RADAR MIGLIORATO)
+# TAB 5 — INSIGHTS
 # ══════════════════════════════════════════════════════════════════════════════
 with tab5:
     st.markdown("#### 💡 Insights Automatici")
@@ -276,24 +305,19 @@ with tab5:
         n_mercati=("mercato", "nunique")
     ).reset_index()
     
-    # Normalizzazione per la forma del poligono
     for col in ["prezzo_medio", "n_prodotti", "n_mercati"]:
         mn, mx = agg_r[col].min(), agg_r[col].max()
         agg_r[f"{col}_norm"] = (agg_r[col] - mn) / (mx - mn) if mx > mn else 0.5
         
     fig_radar = go.Figure()
     categorie = ["Prezzo", "Catalogo", "Mercati"]
-    categorie_chiuse = categorie + [categorie[0]] # Necessario per chiudere le linee del radar
+    categorie_chiuse = categorie + [categorie[0]]
 
     for _, row in agg_r.iterrows():
-        # Valori normalizzati per disegnare
         r_vals = [row[f"{c}_norm"] for c in ["prezzo_medio", "n_prodotti", "n_mercati"]]
         r_vals_chiusi = r_vals + [r_vals[0]]
-        
-        # Valori reali per il tooltip al passaggio del mouse
         valori_reali = [row["prezzo_medio"], row["n_prodotti"], row["n_mercati"]]
         valori_reali_chiusi = valori_reali + [valori_reali[0]]
-        
         comp_name = row["competitor"]
         
         fig_radar.add_trace(go.Scatterpolar(
@@ -310,7 +334,7 @@ with tab5:
     fig_radar.update_layout(
         **base_layout(480),
         polar=dict(
-            radialaxis=dict(visible=False, range=[0, 1]), # Nasconde la scala matematica
+            radialaxis=dict(visible=False, range=[0, 1]),
             bgcolor="#141418"
         )
     )
