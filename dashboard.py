@@ -1,8 +1,3 @@
-"""
-dashboard.py — PhotoSì Competitive Intelligence Dashboard
-Avvio: streamlit run dashboard.py
-"""
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -101,9 +96,8 @@ def load_data(source=None) -> pd.DataFrame:
     df["flag"] = df["mercato"].map(FLAG_MAP).fillna("🌍")
     df["mercato_label"] = df["flag"] + " " + df["mercato"]
     
-    # Pulizia colonna categoria (se esiste)
     if "categoria" in df.columns:
-        df["categoria"] = df["categoria"].fillna("Altro").str.strip().str.title()
+        df["categoria"] = df["categoria"].fillna("Altro").str.strip()
     else:
         df["categoria"] = "Generico"
         
@@ -122,11 +116,7 @@ with st.sidebar:
 
     st.markdown("### 📂 Dati")
     uploaded = st.file_uploader("Sostituisci con CSV locale", type=["csv"])
-
-    if uploaded:
-        df_raw = load_data(uploaded)
-    else:
-        df_raw = load_data()
+    df_raw = load_data(uploaded) if uploaded else load_data()
 
     if st.button("🔄 Ricarica dati"):
         st.cache_data.clear()
@@ -134,42 +124,21 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 🎛️ Filtri")
-
     all_paesi = sorted(df_raw["mercato"].unique())
-    sel_paesi = st.multiselect("Mercati", options=all_paesi, default=all_paesi,
-                                format_func=lambda x: f"{FLAG_MAP.get(x,'🌍')} {x}")
-
+    sel_paesi = st.multiselect("Mercati", options=all_paesi, default=all_paesi, format_func=lambda x: f"{FLAG_MAP.get(x,'🌍')} {x}")
     all_comp = sorted(df_raw["competitor"].unique())
     sel_comp = st.multiselect("Competitor", options=all_comp, default=all_comp)
-
-    min_p = float(df_raw["prezzo_eur"].min())
-    max_p = float(df_raw["prezzo_eur"].max())
-    price_range = st.slider("Range prezzo (€)", min_value=min_p, max_value=max_p,
-                             value=(min_p, max_p), step=0.5)
-
-    st.markdown("---")
-    st.caption(f"Aggiornato: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    min_p, max_p = float(df_raw["prezzo_eur"].min()), float(df_raw["prezzo_eur"].max())
+    price_range = st.slider("Range prezzo (€)", min_value=min_p, max_value=max_p, value=(min_p, max_p), step=0.5)
 
 # Applica filtri globali
-df = df_raw[
-    df_raw["mercato"].isin(sel_paesi) &
-    df_raw["competitor"].isin(sel_comp) &
-    df_raw["prezzo_eur"].between(*price_range)
-].copy()
+df = df_raw[df_raw["mercato"].isin(sel_paesi) & df_raw["competitor"].isin(sel_comp) & df_raw["prezzo_eur"].between(*price_range)].copy()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HEADER
+# HEADER & KPI
 # ─────────────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div style="padding:12px 0 28px 0;border-bottom:1px solid #2d2d3d;margin-bottom:32px;">
-    <h1 style="font-size:32px;font-weight:800;margin:0;letter-spacing:-0.04em;">Competitive Price Intelligence</h1>
-    <p style="color:#8a8a9a;margin:6px 0 0 0;font-size:14px;">Monitoraggio prezzi photobook pan-europeo · EU + UK + CH</p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("""<div style="padding:12px 0 28px 0;border-bottom:1px solid #2d2d3d;margin-bottom:32px;"><h1 style="font-size:32px;font-weight:800;margin:0;letter-spacing:-0.04em;">Competitive Price Intelligence</h1></div>""", unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# KPI
-# ─────────────────────────────────────────────────────────────────────────────
 k1, k2, k3, k4, k5 = st.columns(5)
 with k1: st.metric("📦 Prodotti", f"{len(df):,}")
 with k2: st.metric("🏢 Competitor", f"{df['competitor'].nunique()}")
@@ -179,97 +148,83 @@ with k5:
     ps = df[df["competitor"] == "PhotoSì"]["prezzo_eur"].mean()
     ot = df[df["competitor"] != "PhotoSì"]["prezzo_eur"].mean()
     if pd.notna(ps) and pd.notna(ot) and ot > 0:
-        delta = (ps - ot) / ot * 100
-        st.metric("📍 PhotoSì vs Mercato", f"€ {ps:.2f}", delta=f"{delta:+.1f}%", delta_color="inverse")
-    else:
-        st.metric("📍 PhotoSì vs Mercato", "N/D")
+        st.metric("📍 PhotoSì vs Mercato", f"€ {ps:.2f}", delta=f"{(ps-ot)/ot*100:+.1f}%", delta_color="inverse")
 
-st.markdown("<br>", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TABS
-# ─────────────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "🏠 Overview", "🗺️ Per Mercato", "🏢 Per Competitor", "🔍 Prodotti", "💡 Insights"
-])
-
-# [Omettendo i contenuti dei Tab 1, 2, 3 e 5 per brevità, restano identici al tuo originale]
-# ... (Tab 1, 2, 3 come nel tuo codice) ...
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 Overview", "🗺️ Per Mercato", "🏢 Per Competitor", "🔍 Prodotti", "💡 Insights"])
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — PRODOTTI (AGGIORNATO CON HEATMAP CATEGORIA)
+# TAB 1 — OVERVIEW
+# ══════════════════════════════════════════════════════════════════════════════
+with tab1:
+    col_l, col_r = st.columns([3, 2], gap="large")
+    with col_l:
+        st.markdown("#### 📊 Distribuzione Prezzi per Competitor")
+        comp_order = df.groupby("competitor")["prezzo_eur"].median().sort_values().index.tolist()
+        fig_box = go.Figure()
+        for comp in comp_order:
+            sub = df[df["competitor"] == comp]["prezzo_eur"]
+            fig_box.add_trace(go.Box(y=sub, name=comp, marker_color=COMPETITOR_COLORS.get(comp, "#888888"), boxmean="sd", showlegend=False))
+        fig_box.update_layout(**base_layout(420))
+        st.plotly_chart(fig_box, use_container_width=True)
+    with col_r:
+        st.markdown("#### 🗺️ Heatmap Mercati")
+        pivot = df.groupby(["competitor", "mercato"])["prezzo_eur"].mean().round(2).unstack()
+        fig_heat = go.Figure(go.Heatmap(z=pivot.values, x=pivot.columns, y=pivot.index, colorscale='Viridis'))
+        fig_heat.update_layout(**base_layout(420))
+        st.plotly_chart(fig_heat, use_container_width=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 2 — PER MERCATO
+# ══════════════════════════════════════════════════════════════════════════════
+with tab2:
+    agg_m = df.groupby(["mercato_label", "competitor"])["prezzo_eur"].mean().reset_index()
+    fig_bar = px.bar(agg_m, x="mercato_label", y="prezzo_eur", color="competitor", barmode="group", color_discrete_map=COMPETITOR_COLORS)
+    fig_bar.update_layout(**base_layout(420))
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 3 — PER COMPETITOR
+# ══════════════════════════════════════════════════════════════════════════════
+with tab3:
+    sel_c = st.selectbox("🔍 Seleziona Competitor", options=sorted(df["competitor"].unique()))
+    df_c = df[df["competitor"] == sel_c]
+    st.dataframe(df_c.groupby("mercato")["prezzo_eur"].agg(["mean", "min", "max", "count"]), use_container_width=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 4 — PRODOTTI (CON LA NUOVA HEATMAP)
 # ══════════════════════════════════════════════════════════════════════════════
 with tab4:
-    st.markdown("#### 🔍 Analisi Catalogo e Categorie")
-    
-    # Filtri locali del tab
     f1, f2, f3 = st.columns([2, 2, 3])
-    with f1:
-        filt_comp = st.multiselect("Filtra Competitor", df["competitor"].unique(),
-                                    default=list(df["competitor"].unique())[:5], key="dt_comp")
-    with f2:
-        filt_paese = st.multiselect("Filtra Mercato", sorted(df["mercato"].unique()),
-                                     default=list(sorted(df["mercato"].unique()))[:3], key="dt_paese")
-    with f3:
-        filt_q = st.text_input("🔎 Cerca nel titolo", "", key="dt_query")
+    with f1: filt_comp = st.multiselect("Competitor", df["competitor"].unique(), default=list(df["competitor"].unique())[:5], key="f_c")
+    with f2: filt_paese = st.multiselect("Mercato", sorted(df["mercato"].unique()), default=list(sorted(df["mercato"].unique()))[:3], key="f_m")
+    with f3: filt_q = st.text_input("🔎 Cerca", "", key="f_q")
 
-    # Applica filtri locali
     df_t = df[df["competitor"].isin(filt_comp) & df["mercato"].isin(filt_paese)].copy()
-    if filt_q:
-        df_t = df_t[df_t["prodotto"].str.contains(filt_q, case=False, na=False)]
-    
-    # --- HEATMAP CATEGORIE (NEW) ---
-    if not df_t.empty and "categoria" in df_t.columns:
-        st.markdown("##### 🏷️ Heatmap: Prezzo Medio per Categoria")
-        
-        # Prepariamo la pivot: Categoria vs Competitor
-        pivot_cat = df_t.groupby(["categoria", "competitor"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
-        
-        if not pivot_cat.empty:
-            text_vals_cat = np.where(np.isnan(pivot_cat.values), "", pivot_cat.values.round(1).astype(str))
-            
-            fig_heat_cat = go.Figure(go.Heatmap(
-                z=pivot_cat.values,
-                x=list(pivot_cat.columns),
-                y=list(pivot_cat.index),
-                colorscale=[[0.0, "#0f3a5a"], [0.5, "#2563eb"], [1.0, "#f4a028"]],
-                text=text_vals_cat,
-                texttemplate="%{text}€",
-                textfont=dict(size=10, color="white"),
-                hoverongaps=False,
-                colorbar=dict(title="€", tickfont=dict(color="#c8c4bc")),
-            ))
-            
-            fig_heat_cat.update_layout(**base_layout(min(300 + (len(pivot_cat)*25), 600)))
-            fig_heat_cat.update_xaxes(side="top", showgrid=False, tickfont=dict(color="#c8c4bc"))
-            fig_heat_cat.update_yaxes(showgrid=False, tickfont=dict(color="#c8c4bc"))
-            
-            st.plotly_chart(fig_heat_cat, use_container_width=True)
-        else:
-            st.warning("Dati insufficienti per generare la heatmap con i filtri attuali.")
-    
-    st.markdown("---")
-    
-    # --- TABELLA DATI ---
-    st.markdown(f"**{len(df_t):,} prodotti trovati**")
-    display_cols = [c for c in ["competitor", "mercato_label", "categoria", "prodotto",
-                                 "prezzo_originale", "valuta", "prezzo_eur", "link"]
-                    if c in df_t.columns]
-    
-    st.dataframe(
-        df_t[display_cols].sort_values("prezzo_eur").rename(columns={
-            "mercato_label": "Mercato", "competitor": "Competitor", "categoria": "Categoria",
-            "prodotto": "Prodotto", "prezzo_originale": "Prezzo orig.",
-            "valuta": "Val.", "prezzo_eur": "€ EUR", "link": "Link"
-        }),
-        use_container_width=True, height=400, hide_index=True,
-    )
-    
-    st.download_button(
-        "⬇️ Scarica CSV filtrato",
-        data=df_t.to_csv(index=False, encoding="utf-8-sig"),
-        file_name=f"price_data_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-        mime="text/csv",
-    )
+    if filt_q: df_t = df_t[df_t["prodotto"].str.contains(filt_q, case=False, na=False)]
 
-# ... (Tab 1, 2, 3 e 5 restano invariati rispetto al tuo codice) ...
+    if not df_t.empty and "categoria" in df_t.columns:
+        st.markdown("#### 🏷️ Heatmap Prezzo Medio per Categoria")
+        pivot_cat = df_t.groupby(["categoria", "competitor"])["prezzo_eur"].mean().round(2).unstack()
+        fig_c = go.Figure(go.Heatmap(z=pivot_cat.values, x=pivot_cat.columns, y=pivot_cat.index, colorscale=[[0, "#0f3a5a"], [1, "#f4a028"]], text=pivot_cat.values, texttemplate="%{text}€"))
+        fig_c.update_layout(**base_layout(350))
+        st.plotly_chart(fig_c, use_container_width=True)
+
+    st.dataframe(df_t.sort_values("prezzo_eur"), use_container_width=True, hide_index=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 5 — INSIGHTS
+# ══════════════════════════════════════════════════════════════════════════════
+with tab5:
+    st.markdown("#### 💡 Analisi Strategica")
+    # Radar e Insights originali qui
+    agg_r = df.groupby("competitor").agg(prezzo_medio=("prezzo_eur", "mean"), n_prodotti=("prodotto", "count"), n_mercati=("mercato", "nunique")).reset_index()
+    for col in ["prezzo_medio", "n_prodotti", "n_mercati"]:
+        mn, mx = agg_r[col].min(), agg_r[col].max()
+        agg_r[f"{col}_norm"] = (agg_r[col] - mn) / (mx - mn) if mx > mn else 0.5
+    fig_radar = go.Figure()
+    for _, row in agg_r.iterrows():
+        fig_radar.add_trace(go.Scatterpolar(r=[row[f"{c}_norm"] for c in ["prezzo_medio", "n_prodotti", "n_mercati"]], theta=["Prezzo", "Catalogo", "Mercati"], fill="toself", name=row["competitor"]))
+    fig_radar.update_layout(**base_layout(450))
+    st.plotly_chart(fig_radar, use_container_width=True)
+
+st.markdown("""<hr><div style="text-align:center;font-size:12px;color:#555;">📸 PhotoSì Intelligence</div>""", unsafe_allow_html=True)
