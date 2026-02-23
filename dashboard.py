@@ -98,18 +98,31 @@ def assegna_categoria(nome_prodotto):
 # ─────────────────────────────────────────────────────────────────────────────
 GSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTiV9qPamByIO9e9RCvaypHSqs4iP55n3p9bATJ-i3IWZ3g1pxDxzV_1awMbs6RYjmx8YISo3bp11yQ/pub?output=csv"
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60) # Abbassato a 1 minuto per massima freschezza
 def load_data(source=None) -> pd.DataFrame:
     if source is not None:
         df = pd.read_csv(source)
     else:
         try:
-            df = pd.read_csv(GSHEET_CSV_URL)
+            # AGGIUNTA CACHE BREAKER: 
+            # Generiamo un timestamp per far credere a Google e Streamlit che l'URL sia sempre nuovo
+            import time
+            timestamp = int(time.time())
+            cache_breaker_url = f"{GSHEET_CSV_URL}&cachebuster={timestamp}"
+            
+            df = pd.read_csv(cache_breaker_url)
         except Exception as e:
-            st.error(f"❌ Impossibile scaricare: {e}")
-            st.stop()
+            # Se il link modificato dovesse fallire, riprova con quello base
+            try:
+                df = pd.read_csv(GSHEET_CSV_URL)
+            except Exception as e2:
+                st.error(f"❌ Impossibile scaricare i dati: {e2}")
+                st.stop()
 
+    # Pulizia colonne (case insensitive)
     df.columns = df.columns.str.lower().str.strip()
+    
+    # Mapping nomi colonne
     df.rename(columns={"prezzo_pulito": "prezzo_eur", "link_acquisto": "link"}, inplace=True)
     
     for col in ["prezzo_eur", "prezzo_originale"]:
@@ -118,9 +131,12 @@ def load_data(source=None) -> pd.DataFrame:
     
     df = df.dropna(subset=["prezzo_eur"])
     df = df[df["prezzo_eur"].between(0.5, 500)]
+    
+    # Metadati mercati
     df["flag"] = df["mercato"].map(FLAG_MAP).fillna("🌍")
     df["mercato_label"] = df["flag"] + " " + df["mercato"]
     
+    # Auto-categorizzazione basata sui nomi prodotti
     if "prodotto" in df.columns:
         df["categoria"] = df["prodotto"].apply(assegna_categoria)
     else:
