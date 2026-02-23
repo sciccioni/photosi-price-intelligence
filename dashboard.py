@@ -129,8 +129,8 @@ def load_data(source=None) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     
-    df = df.dropna(subset=["prezzo_eur"])
-    df = df[df["prezzo_eur"].between(0.5, 500)]
+    #df = df.dropna(subset=["prezzo_eur"])
+    #df = df[df["prezzo_eur"].between(0.5, 500)]
     
     # Metadati mercati
     df["flag"] = df["mercato"].map(FLAG_MAP).fillna("🌍")
