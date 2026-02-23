@@ -280,7 +280,7 @@ with tab4:
             x_title, y_title = "Mercato", "Prodotto"
 
         if not pivot_data.empty:
-            # Altezza dinamica: se ci sono tanti prodotti l'altezza aumenta per non schiacciare le righe
+            # Altezza dinamica: se ci sono tanti prodotti l'altezza aumenta
             dyn_height = max(500, len(pivot_data.index) * 30 + 100)
             
             fig_c = go.Figure(go.Heatmap(
@@ -292,13 +292,16 @@ with tab4:
                 texttemplate="%{text} €",
                 hovertemplate=f"<b>{x_title}:</b> %{{x}}<br><b>{y_title}:</b> %{{y}}<br><b>Prezzo Medio:</b> €%{{text}}<extra></extra>"
             ))
-            fig_c.update_layout(
-                **base_layout(dyn_height), 
-                xaxis_title=x_title, 
-                yaxis_title=y_title,
-                margin=dict(l=20, r=20, t=20, b=80) # Più spazio sotto
-            )
+            
+            # 🛠️ FIX DELL'ERRORE: aggiorno prima il layout base, poi sovrascrivo i margini senza conflitti
+            layout_dinamico = base_layout(dyn_height)
+            layout_dinamico["margin"] = dict(l=20, r=20, t=20, b=80)
+            layout_dinamico["xaxis_title"] = x_title
+            layout_dinamico["yaxis_title"] = y_title
+            
+            fig_c.update_layout(**layout_dinamico)
             fig_c.update_xaxes(side="bottom")
+            
             st.plotly_chart(fig_c, use_container_width=True)
 
     st.markdown("#### 📋 Dettaglio Prodotti")
