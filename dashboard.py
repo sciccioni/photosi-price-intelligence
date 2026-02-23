@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
 import os
+API_KEY = os.getenv("SERPER_API_KEY")
 from datetime import datetime
 
 # ─────────────────────────────────────────────────────────────────────────────
