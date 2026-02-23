@@ -96,7 +96,6 @@ def load_data(source=None) -> pd.DataFrame:
     df["flag"] = df["mercato"].map(FLAG_MAP).fillna("🌍")
     df["mercato_label"] = df["flag"] + " " + df["mercato"]
     
-    # Pulizia categoria
     if "categoria" in df.columns:
         df["categoria"] = df["categoria"].fillna("Altro").str.strip()
     else:
@@ -222,7 +221,7 @@ with tab3:
     st.plotly_chart(fig_vs, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — PRODOTTI (CON AGGIUNTA HEATMAP CATEGORIA)
+# TAB 4 — PRODOTTI (CON HEATMAP PER CATEGORIA)
 # ══════════════════════════════════════════════════════════════════════════════
 with tab4:
     f1, f2, f3 = st.columns([2, 2, 3])
@@ -233,21 +232,29 @@ with tab4:
     df_t = df[df["competitor"].isin(filt_comp) & df["mercato"].isin(filt_paese)].copy()
     if filt_q: df_t = df_t[df_t["prodotto"].str.contains(filt_q, case=False, na=False)]
 
-    # NUOVA HEATMAP PER CATEGORIA
     if not df_t.empty and "categoria" in df_t.columns:
-        st.markdown("#### 🏷️ Heatmap: Prezzo Medio per Categoria e Competitor")
+        st.markdown("#### 🏷️ Prezzo Medio per Categoria e Competitor")
         pivot_cat = df_t.groupby(["categoria", "competitor"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
         if not pivot_cat.empty:
-            fig_c = go.Figure(go.Heatmap(z=pivot_cat.values, x=pivot_cat.columns, y=pivot_cat.index, colorscale=[[0, "#0f3a5a"], [1, "#f4a028"]], text=pivot_cat.values, texttemplate="%{text}€"))
-            fig_c.update_layout(**base_layout(350))
-            fig_c.update_xaxes(side="top")
+            fig_c = go.Figure(go.Heatmap(
+                z=pivot_cat.values, 
+                x=pivot_cat.columns, 
+                y=pivot_cat.index, 
+                colorscale=[[0, "#1a1a24"], [0.5, "#e87f12"], [1, "#f4a028"]], 
+                text=pivot_cat.values, 
+                texttemplate="%{text} €",
+                hovertemplate="<b>Competitor:</b> %{x}<br><b>Categoria:</b> %{y}<br><b>Prezzo Medio:</b> €%{text}<extra></extra>"
+            ))
+            fig_c.update_layout(**base_layout(400), xaxis_title="Competitor", yaxis_title="Categoria Prodotto")
+            fig_c.update_xaxes(side="bottom")
             st.plotly_chart(fig_c, use_container_width=True)
 
+    st.markdown("#### 📋 Dettaglio Prodotti")
     st.dataframe(df_t.sort_values("prezzo_eur"), use_container_width=True, hide_index=True)
-    st.download_button("⬇️ Scarica CSV", df_t.to_csv(index=False), "data.csv", "text/csv")
+    st.download_button("⬇️ Scarica CSV", df_t.to_csv(index=False).encode('utf-8'), "dettaglio_prodotti.csv", "text/csv")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 5 — INSIGHTS
+# TAB 5 — INSIGHTS (CON RADAR MIGLIORATO)
 # ══════════════════════════════════════════════════════════════════════════════
 with tab5:
     st.markdown("#### 💡 Insights Automatici")
@@ -263,14 +270,50 @@ with tab5:
         st.markdown(f'<div class="insight-card">{ins}</div>', unsafe_allow_html=True)
 
     st.markdown("#### 🎯 Radar Competitivo")
-    agg_r = df.groupby("competitor").agg(prezzo_medio=("prezzo_eur", "mean"), n_prodotti=("prodotto", "count"), n_mercati=("mercato", "nunique")).reset_index()
+    agg_r = df.groupby("competitor").agg(
+        prezzo_medio=("prezzo_eur", "mean"), 
+        n_prodotti=("prodotto", "count"), 
+        n_mercati=("mercato", "nunique")
+    ).reset_index()
+    
+    # Normalizzazione per la forma del poligono
     for col in ["prezzo_medio", "n_prodotti", "n_mercati"]:
         mn, mx = agg_r[col].min(), agg_r[col].max()
         agg_r[f"{col}_norm"] = (agg_r[col] - mn) / (mx - mn) if mx > mn else 0.5
+        
     fig_radar = go.Figure()
+    categorie = ["Prezzo", "Catalogo", "Mercati"]
+    categorie_chiuse = categorie + [categorie[0]] # Necessario per chiudere le linee del radar
+
     for _, row in agg_r.iterrows():
-        fig_radar.add_trace(go.Scatterpolar(r=[row[f"{c}_norm"] for c in ["prezzo_medio", "n_prodotti", "n_mercati"]], theta=["Prezzo", "Catalogo", "Mercati"], fill="toself", name=row["competitor"]))
-    fig_radar.update_layout(**base_layout(480))
+        # Valori normalizzati per disegnare
+        r_vals = [row[f"{c}_norm"] for c in ["prezzo_medio", "n_prodotti", "n_mercati"]]
+        r_vals_chiusi = r_vals + [r_vals[0]]
+        
+        # Valori reali per il tooltip al passaggio del mouse
+        valori_reali = [row["prezzo_medio"], row["n_prodotti"], row["n_mercati"]]
+        valori_reali_chiusi = valori_reali + [valori_reali[0]]
+        
+        comp_name = row["competitor"]
+        
+        fig_radar.add_trace(go.Scatterpolar(
+            r=r_vals_chiusi,
+            theta=categorie_chiuse,
+            fill="toself",
+            name=comp_name,
+            line_color=COMPETITOR_COLORS.get(comp_name, "#888888"),
+            opacity=0.7,
+            customdata=valori_reali_chiusi,
+            hovertemplate="<b>%{theta}</b>: %{customdata:.2f}<extra></extra>"
+        ))
+        
+    fig_radar.update_layout(
+        **base_layout(480),
+        polar=dict(
+            radialaxis=dict(visible=False, range=[0, 1]), # Nasconde la scala matematica
+            bgcolor="#141418"
+        )
+    )
     st.plotly_chart(fig_radar, use_container_width=True)
 
 st.markdown("""<hr><div style="text-align:center;font-size:12px;color:#555;">📸 PhotoSì Price Intelligence</div>""", unsafe_allow_html=True)
