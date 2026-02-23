@@ -18,7 +18,7 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+@import url('https://docs.google.com/spreadsheets/d/e/2PACX-1vR24SpTQKbFdiGFGbVloEA7Ltd1sbrOB7k-zq0xaBkILe2_uGrjhjVZBA9AOiamVggQ2P-_aW9NpOBc/pub?gid=2472083&single=true&output=csv');
 html, body, [class*="css"] { font-family:'DM Sans',sans-serif; background:#0d0d0f; color:#e8e4dc; }
 .stApp { background:#0d0d0f; }
 [data-testid="stSidebar"] { background:#141418; border-right:1px solid #2a2a35; }
