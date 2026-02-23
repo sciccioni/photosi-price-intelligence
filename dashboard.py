@@ -38,6 +38,8 @@ hr { border-color:#2d2d3d !important; }
 ::-webkit-scrollbar-thumb { background:#3a3a4a; border-radius:3px; }
 .insight-card { background:#1a1a24; border:1px solid #2d2d3d; border-left:3px solid #f4a028; border-radius:12px; padding:16px 20px; margin-bottom:10px; font-size:14px; line-height:1.6; }
 .insight-card strong { color:#f4a028; }
+/* Stile per radio button in orizzontale */
+div[role="radiogroup"] { flex-direction: row; gap: 20px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -119,7 +121,6 @@ def load_data(source=None) -> pd.DataFrame:
     df["flag"] = df["mercato"].map(FLAG_MAP).fillna("🌍")
     df["mercato_label"] = df["flag"] + " " + df["mercato"]
     
-    # 💡 CREAZIONE AUTOMATICA DELLA COLONNA CATEGORIA
     if "prodotto" in df.columns:
         df["categoria"] = df["prodotto"].apply(assegna_categoria)
     else:
@@ -246,7 +247,7 @@ with tab3:
     st.plotly_chart(fig_vs, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — PRODOTTI (ORA LA HEATMAP PER CATEGORIA FUNZIONA!)
+# TAB 4 — PRODOTTI E HEATMAP MULTIPLE (CATEGORIA, PRODOTTO, MERCATO)
 # ══════════════════════════════════════════════════════════════════════════════
 with tab4:
     f1, f2, f3 = st.columns([2, 2, 3])
@@ -257,29 +258,50 @@ with tab4:
     df_t = df[df["competitor"].isin(filt_comp) & df["mercato"].isin(filt_paese)].copy()
     if filt_q: df_t = df_t[df_t["prodotto"].str.contains(filt_q, case=False, na=False)]
 
-    st.markdown("#### 🏷️ Prezzo Medio per Categoria e Competitor")
+    st.markdown("#### 🏷️ Esplorazione Heatmap")
     
     if df_t.empty:
         st.warning("⚠️ Non ci sono dati con questi filtri.")
     else:
-        # Crea la pivot table raggruppando per la nostra nuova colonna 'categoria' generata automaticamente
-        pivot_cat = df_t.groupby(["categoria", "competitor"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
+        # Selettore tipo Heatmap
+        hm_type = st.radio("Scegli quale Heatmap visualizzare:", 
+                           ["🗂️ Categoria vs Competitor", "📦 Prodotto vs Competitor", "🌍 Prodotto vs Mercato"], 
+                           horizontal=True)
         
-        fig_c = go.Figure(go.Heatmap(
-            z=pivot_cat.values, 
-            x=pivot_cat.columns, 
-            y=pivot_cat.index, 
-            colorscale=[[0, "#1a1a24"], [0.5, "#e87f12"], [1, "#f4a028"]], 
-            text=pivot_cat.values, 
-            texttemplate="%{text} €",
-            hovertemplate="<b>Competitor:</b> %{x}<br><b>Categoria:</b> %{y}<br><b>Prezzo Medio:</b> €%{text}<extra></extra>"
-        ))
-        fig_c.update_layout(**base_layout(500), xaxis_title="Competitor", yaxis_title="Categoria Prodotto")
-        fig_c.update_xaxes(side="bottom")
-        st.plotly_chart(fig_c, use_container_width=True)
+        # Logica Pivot a seconda della scelta
+        if hm_type == "🗂️ Categoria vs Competitor":
+            pivot_data = df_t.groupby(["categoria", "competitor"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
+            x_title, y_title = "Competitor", "Categoria"
+        elif hm_type == "📦 Prodotto vs Competitor":
+            pivot_data = df_t.groupby(["prodotto", "competitor"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
+            x_title, y_title = "Competitor", "Prodotto"
+        else: # Prodotto vs Mercato
+            pivot_data = df_t.groupby(["prodotto", "mercato"])["prezzo_eur"].mean().round(2).unstack(fill_value=np.nan)
+            x_title, y_title = "Mercato", "Prodotto"
+
+        if not pivot_data.empty:
+            # Altezza dinamica: se ci sono tanti prodotti l'altezza aumenta per non schiacciare le righe
+            dyn_height = max(500, len(pivot_data.index) * 30 + 100)
+            
+            fig_c = go.Figure(go.Heatmap(
+                z=pivot_data.values, 
+                x=pivot_data.columns, 
+                y=pivot_data.index, 
+                colorscale=[[0, "#1a1a24"], [0.5, "#e87f12"], [1, "#f4a028"]], 
+                text=pivot_data.values, 
+                texttemplate="%{text} €",
+                hovertemplate=f"<b>{x_title}:</b> %{{x}}<br><b>{y_title}:</b> %{{y}}<br><b>Prezzo Medio:</b> €%{{text}}<extra></extra>"
+            ))
+            fig_c.update_layout(
+                **base_layout(dyn_height), 
+                xaxis_title=x_title, 
+                yaxis_title=y_title,
+                margin=dict(l=20, r=20, t=20, b=80) # Più spazio sotto
+            )
+            fig_c.update_xaxes(side="bottom")
+            st.plotly_chart(fig_c, use_container_width=True)
 
     st.markdown("#### 📋 Dettaglio Prodotti")
-    # Mostriamo anche la colonna categoria creata così vedi come l'ha assegnata
     st.dataframe(df_t[["mercato", "competitor", "categoria", "prodotto", "prezzo_eur"]].sort_values("prezzo_eur"), use_container_width=True, hide_index=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
